@@ -1,10 +1,51 @@
-<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <!DOCTYPE html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>SONAB SARL – Gestion</title>
+<meta name="theme-color" content="#1d3557">
+<meta name="description" content="SONAB SARL – Gestion : factures, stock, chantiers, dépenses, employés">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="SONAB">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+const firebaseConfig = {
+  apiKey: "AIzaSyDlYIfiYF61xJ-BYVG2gFNA70u03R1PiX8",
+  authDomain: "sonap-12b72.firebaseapp.com",
+  projectId: "sonap-12b72",
+  storageBucket: "sonap-12b72.firebasestorage.app",
+  messagingSenderId: "668056144776",
+  appId: "1:668056144776:web:124e6e7d7e5cb7c103883d"
+};
+try{
+  const app = initializeApp(firebaseConfig);
+  const fs = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
+  const noop = ()=>{};
+  // Adaptateur : même API que celle utilisée par l'application (collection/doc/set/delete/onSnapshot)
+  window.SONAB_DB = {
+    collection: c => ({
+      doc: id => ({
+        set: o => { setDoc(doc(fs,c,id),o).catch(console.error); return Promise.resolve(); },
+        delete: () => { deleteDoc(doc(fs,c,id)).catch(console.error); return Promise.resolve(); }
+      }),
+      onSnapshot: (ok,err) => onSnapshot(collection(fs,c), s=>ok({docs:s.docs.map(d=>({data:()=>d.data()}))}), err||noop)
+    }),
+    doc: path => { const [c,id]=path.split("/"); return {
+      set: o => { setDoc(doc(fs,c,id),o).catch(console.error); return Promise.resolve(); },
+      onSnapshot: (ok,err) => onSnapshot(doc(fs,c,id), s=>ok({exists:s.exists(),data:()=>s.data()}), err||noop)
+    }; }
+  };
+}catch(e){ console.error("Firebase indisponible",e); }
+window.dispatchEvent(new Event("sonab-db-ready"));
+</script>
+
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&family=Noto+Sans+Arabic:wght@400..700&display=swap" rel="stylesheet">
@@ -313,9 +354,14 @@ async function putCfg(cfg){
 async function init(){
   loadLocal(); render();
   try{
-    DB = window.claude ? await claude.use("db") : null;
+    if(window.claude){ DB = await claude.use("db"); }
+    else{
+      if(!window.SONAB_DB) await new Promise(r=>{ window.addEventListener("sonab-db-ready",r,{once:true}); setTimeout(r,6000); });
+      DB = window.SONAB_DB || null;
+    }
   }catch(e){ DB=null; }
   try{ DL = window.claude ? await claude.use("downloads") : null; }catch(e){ DL=null; }
+  if(!DL) DL = { save: async ({filename,data}) => { const b=new Blob([data],{type:/\.json$/.test(filename)?"application/json":"text/html"}); const a=document.createElement("a"); a.href=URL.createObjectURL(b); a.download=filename; document.body.appendChild(a); a.click(); setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove();},1500); } };
   if(DB){
     MODE="cloud";
     let first = {}; 
@@ -1683,7 +1729,6 @@ applyLang();
 
 init();
 </script>
+<script>if("serviceWorker" in navigator && location.protocol.startsWith("http")){ window.addEventListener("load",()=>navigator.serviceWorker.register("sw.js").catch(console.error)); }</script>
 </body>
 </html>
-
-</body></html>
